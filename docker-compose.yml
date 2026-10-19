@@ -1,0 +1,44 @@
+# Sobe tudo no computador: Postgres, API e app.  docker compose up -d --build
+# Sem ENCONTROS_MONGO_URI no .env, use ENCONTROS_MODO_DEMO=true para testar com perfis prontos.
+services:
+  encontros-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: encontros
+      POSTGRES_PASSWORD: encontros
+      POSTGRES_DB: encontros
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U encontros"]
+      interval: 5s
+      retries: 10
+
+  encontros-api:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      ENCONTROS_DATABASE_URL: postgresql+asyncpg://encontros:encontros@encontros-postgres:5432/encontros
+      ENCONTROS_PASTA_FOTOS: /app/dados/fotos
+      ENCONTROS_PORTA: "8000"
+    volumes:
+      - fotos:/app/dados
+    ports:
+      - "8020:8000"
+    depends_on:
+      encontros-postgres:
+        condition: service_healthy
+
+  encontros-app:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8020}
+    ports:
+      - "3020:3000"
+    depends_on:
+      - encontros-api
+
+volumes:
+  postgres:
+  fotos:

@@ -1,0 +1,17 @@
+# Python
+backend/.venv/
+backend/dados/
+backend/.env
+
+# segredos locais (chaves da OpenRouter, acesso ao CRM)
+.env
+.env.*
+!.env.example
+!**/.env.example
+**/__pycache__/
+.pytest_cache/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/.env*.local

@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* Cores do Basiléia (menu do CRM): roxo profundo, lavanda nos rótulos.
+   Claro é o padrão; o escuro vem do sistema ou da escolha da pessoa (data-tema no <html>). */
+:root {
+  --fundo: #f6f4ff;
+  --superficie: #ffffff;
+  --superficie-2: #efeafe;
+  --borda: #e3dcfb;
+  --texto: #1a1040;
+  --texto-2: #5f5587;
+  --primaria: #6d28d9;
+  --primaria-forte: #5b21b6;
+  --sobre-primaria: #ffffff;
+  --destaque: #7c3aed;
+  --perigo: #e11d48;
+  --sucesso: #059669;
+  --sombra: 0 10px 30px -12px rgba(46, 16, 101, 0.25);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --fundo: #110a30;
+    --superficie: #1a1044;
+    --superficie-2: #24165b;
+    --borda: #33237a;
+    --texto: #f5f3ff;
+    --texto-2: #b6aade;
+    --primaria: #8b5cf6;
+    --primaria-forte: #7c3aed;
+    --sobre-primaria: #ffffff;
+    --destaque: #c4b5fd;
+    --perigo: #fb7185;
+    --sucesso: #34d399;
+    --sombra: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-tema="escuro"] {
+  --fundo: #110a30;
+  --superficie: #1a1044;
+  --superficie-2: #24165b;
+  --borda: #33237a;
+  --texto: #f5f3ff;
+  --texto-2: #b6aade;
+  --primaria: #8b5cf6;
+  --primaria-forte: #7c3aed;
+  --sobre-primaria: #ffffff;
+  --destaque: #c4b5fd;
+  --perigo: #fb7185;
+  --sucesso: #34d399;
+  --sombra: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-superficie: var(--superficie);
+  --color-superficie-2: var(--superficie-2);
+  --color-borda: var(--borda);
+  --color-texto: var(--texto);
+  --color-texto-2: var(--texto-2);
+  --color-primaria: var(--primaria);
+  --color-primaria-forte: var(--primaria-forte);
+  --color-sobre-primaria: var(--sobre-primaria);
+  --color-destaque: var(--destaque);
+  --color-perigo: var(--perigo);
+  --color-sucesso: var(--sucesso);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+  --shadow-cartao: var(--sombra);
+}
+
+html,
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Rótulo de seção, como "GESTÃO ——" no menu do CRM */
+.rotulo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--destaque);
+}
+.rotulo::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--borda), transparent);
+}
+
+.pb-seguro {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}
+
+@keyframes surgir {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.surgir {
+  animation: surgir 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surgir { animation: none; }
+}
