@@ -83,7 +83,7 @@ Dois serviços **App** a partir deste repositório (fonte GitHub, build por Dock
 - Variáveis:
 
 ```
-ENCONTROS_DATABASE_URL=postgresql+asyncpg://usuario:senha@NOME-DO-POSTGRES:5432/banco
+ENCONTROS_DATABASE_URL=postgres://usuario:senha@NOME-DO-POSTGRES:5432/banco?sslmode=disable   # a URL do Easypanel, como vem
 ENCONTROS_MONGO_URI=mongodb://...            # o usuário só de leitura do Motor de Cuidado
 ENCONTROS_MONGO_DB=dexos_basileia
 ENCONTROS_IGREJAS=*                          # ou os ids das igrejas de teste

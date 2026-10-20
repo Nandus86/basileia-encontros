@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import parse_qsl, urlencode
 
 from sqlalchemy import JSON, Boolean, event, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
@@ -111,7 +112,19 @@ class DenunciaTb(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
 
+def url_assincrona(url: str) -> str:
+    """Aceita a URL como o Easypanel/Heroku entregam (postgres://…?sslmode=disable) e passa para o asyncpg,
+    que quer postgresql+asyncpg:// e entende "ssl" no lugar de "sslmode"."""
+    esquema, _, resto = url.partition("://")
+    if esquema not in ("postgres", "postgresql"):
+        return url
+    endereco, _, consulta = resto.partition("?")
+    parametros = [("ssl" if k == "sslmode" else k, v) for k, v in parse_qsl(consulta, keep_blank_values=True)]
+    return f"postgresql+asyncpg://{endereco}" + (f"?{urlencode(parametros)}" if parametros else "")
+
+
 def criar_motor(url: str) -> AsyncEngine:
+    url = url_assincrona(url)
     if url.startswith("sqlite"):
         motor = create_async_engine(url, connect_args={"timeout": 15})
 

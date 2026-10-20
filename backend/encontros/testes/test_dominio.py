@@ -89,3 +89,12 @@ def test_distancia_arredondada():
     assert distancia_aproximada(1.2) == 5
     assert distancia_aproximada(12.1) == 15
     assert distancia_aproximada(None) is None
+
+
+def test_url_do_banco_como_o_easypanel_entrega():
+    from encontros.infraestrutura.banco import url_assincrona
+    assert url_assincrona("postgres://u:s@bd:5432/encontros?sslmode=disable") == \
+        "postgresql+asyncpg://u:s@bd:5432/encontros?ssl=disable"
+    assert url_assincrona("postgresql://u:s@bd/e") == "postgresql+asyncpg://u:s@bd/e"
+    assert url_assincrona("postgresql+asyncpg://u:s@bd/e") == "postgresql+asyncpg://u:s@bd/e"
+    assert url_assincrona("sqlite+aiosqlite:///./dados/x.db") == "sqlite+aiosqlite:///./dados/x.db"
