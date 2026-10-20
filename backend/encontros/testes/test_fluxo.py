@@ -1,53 +1,49 @@
-"""O caminho inteiro pela API, no modo demonstração (SQLite numa pasta temporária, sem Mongo)."""
+"""O caminho inteiro pela API, no modo de teste (SQLite numa pasta temporária, sem Mongo, IA de mentira)."""
 import io
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from encontros.aplicacao.curadoria import Curadoria
-from encontros.aplicacao.julgamentos import PERGUNTAS_AFINIDADE
+from encontros.aplicacao.comparador import Comparador
 from encontros.aplicacao.portas import Julgamento
 from encontros.config import Configuracao
 from encontros.container import montar
-from encontros.dominio.perfil import Genero
 from encontros.entrada.api import criar_app
 from encontros.infraestrutura.diretorio_demo import ANA, LUCAS
 
-DEBORA, SARA, PRISCILA, GABRIEL = "12345678909", "13579246828", "11223344517", "55667788950"
+DEBORA = "12345678909"
+LIDER = {"X-Chave-Lider": "lider-teste"}
 
 
 class JevDeMentira:
-    """Responde como o JEV: tudo compatível, menos quem não tem nenhum hobby igual."""
-
-    def __init__(self):
-        self.chamadas = 0
+    """Responde como o JEV: compatível quando há hobby igual; respostas sempre "muito parecidas"."""
 
     async def julgar(self, estado, perguntas):
-        self.chamadas += 1
         if "bio" in perguntas:
             return Julgamento({"bio": "improprio" if "proibido" in estado else "adequado"}, "jev")
-        assert set(perguntas) == set(PERGUNTAS_AFINIDADE)
+        if "comparacao" in perguntas:
+            return Julgamento({"comparacao": "muito_parecidas"}, "jev")
+        if "tema" in perguntas:
+            return Julgamento({"tema": "perdao"}, "jev")
         nada = "Hobbies exatamente iguais: nenhum" in estado
         return Julgamento({"afinidade": "baixa" if nada else "alta", "proximidade": "perto",
                            "apresentar": "nao" if nada else "sim"}, "jev")
 
 
 @pytest.fixture
-def jev():
-    return JevDeMentira()
-
-
-@pytest.fixture
-def cliente(tmp_path, jev):
+def cliente(tmp_path):
     config = Configuracao(database_url=f"sqlite+aiosqlite:///{tmp_path}/t.db", pasta_fotos=str(tmp_path / "fotos"),
-                          modo_demo=True, jwt_secret="segredo-de-teste-123", _env_file=None)
+                          modo_demo=True, jwt_secret="segredo-de-teste-123", openrouter_api_key="", _env_file=None)
+    jev = JevDeMentira()
 
     async def montador(cfg):
         c = await montar(cfg)
-        c.curadoria = Curadoria(c.repositorio, jev)
-        c.conversas._curadoria = c.curadoria
+        comparador = Comparador(jev)
+        c.curadoria._julgador = jev
         c.atualizar_perfil._julgador = jev
+        c.jornada._comparador = comparador
+        c.conexoes._pontuacao._comparador = comparador
         return c
 
     with TestClient(criar_app(montador, config)) as cliente:
@@ -67,88 +63,120 @@ def foto_jpg():
 
 
 def completar(cliente, h, hobbies):
-    r = cliente.put("/eu", headers=h, json={"hobbies": hobbies, "bio": "Gosto de louvor e café."})
-    assert r.status_code == 200, r.text
+    assert cliente.put("/eu", headers=h, json={"hobbies": hobbies, "bio": "Gosto de louvor e café."}).status_code == 200
     r = cliente.post("/eu/foto", headers=h, files={"foto": ("eu.jpg", foto_jpg(), "image/jpeg")})
     assert r.status_code == 200 and r.json()["completo"]
+
+
+def conexao_com(cliente, h, pontos):
+    return next(x for x in cliente.get("/conexoes", headers=h).json() if x["pontos"] == pontos)
 
 
 def test_so_entra_membro_solteiro_maior(cliente):
     assert "maiores de 18" in cliente.post("/entrar", json={"usuario": "33366699957", "senha": "33366699957"}).json()["detail"]
     assert "solteiros" in cliente.post("/entrar", json={"usuario": "44477700083", "senha": "44477700083"}).json()["detail"]
     assert "membros" in cliente.post("/entrar", json={"usuario": "55588811194", "senha": "55588811194"}).json()["detail"]
-    assert cliente.post("/entrar", json={"usuario": LUCAS, "senha": "123"}).status_code == 403
     assert cliente.get("/eu").status_code == 401
 
 
-def test_do_descobrir_ao_match_e_a_foto_liberada(cliente, jev):
+def test_conexoes_adiantadas_revelam_so_o_que_cada_um_escolheu(cliente):
     lucas = entrar(cliente, LUCAS)
-    assert cliente.get("/descobrir", headers=lucas).json() == {"pronto": False, "cartoes": []}
-    completar(cliente, lucas, ["Louvor e música", "Café", "Leitura bíblica", "Missões"])
-
-    cartoes = cliente.get("/descobrir", headers=lucas).json()["cartoes"]
-    nomes = [c["nome"] for c in cartoes]
-    assert "Débora" in nomes and "Sara" in nomes
-    assert "Priscila" not in nomes                     # Teresina: fora do raio
-    assert "Lídia" not in nomes                        # nenhum hobby igual
-    assert all("foto" not in c for c in cartoes)       # o cartão nunca leva foto
-    debora = next(c for c in cartoes if c["nome"] == "Débora")
-    assert debora["em_comum"] and debora["afinidade"]["nivel"] == "alta"
-
-    chamadas = jev.chamadas
-    cliente.get("/descobrir", headers=lucas)
-    assert jev.chamadas == chamadas                    # a afinidade guardada é reaproveitada
-
-    # a Débora já tinha curtido: match na hora
-    match = cliente.post("/reacoes", headers=lucas, json={"para_id": debora["id"], "curtiu": True}).json()["match"]
-    assert match and match["pessoa"]["nome"] == "Débora"
-    assert "Débora" not in [c["nome"] for c in cliente.get("/descobrir", headers=lucas).json()["cartoes"]]
-
-    # a foto dela continua escondida até ela liberar
-    assert cliente.get(f"/fotos/{debora['id']}", headers=lucas).status_code == 404
-    deb = entrar(cliente, DEBORA)
-    cliente.post(f"/matches/{match['id']}/mensagens", headers=deb, json={"texto": "Oi, Lucas! Paz!"})
-    assert cliente.get("/matches", headers=lucas).json()[0]["nao_lidas"] == 1
-    assert cliente.post(f"/matches/{match['id']}/liberar-foto", headers=deb).status_code == 200
-    r = cliente.get(f"/fotos/{debora['id']}", headers=lucas)
-    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
-    meu = cliente.get("/matches", headers=deb).json()[0]
-    assert meu["eu_liberei"] and not meu["foto_liberada"]
-
-    lidas = cliente.get(f"/matches/{match['id']}/mensagens", headers=lucas).json()["mensagens"]
-    assert [m["texto"] for m in lidas] == ["Oi, Lucas! Paz!"] and not lidas[0]["minha"]
-    cliente.post(f"/matches/{match['id']}/lido", headers=lucas, json={"ate": lidas[-1]["id"]})
-    assert cliente.get("/matches", headers=lucas).json()[0]["nao_lidas"] == 0
-
-    # desfazer: some a conversa e a foto volta a ficar escondida
-    assert cliente.delete(f"/matches/{match['id']}", headers=lucas).status_code == 200
-    assert cliente.get("/matches", headers=lucas).json() == []
-    assert cliente.get(f"/fotos/{debora['id']}", headers=lucas).status_code == 404
+    lista = cliente.get("/conexoes", headers=lucas).json()
+    assert sorted(x["pontos"] for x in lista) == [150, 290, 390]
+    for x in lista:
+        assert x["outra"]["codinome"] and x["outra"]["hobbies"]
+        assert x["outra"]["foto"] is False and not x["chat_aberto"]
+    debora = conexao_com(cliente, lucas, 390)["outra"]     # ela revela nome com 150 e idade com 200
+    assert debora["nome"] == "Débora" and debora["idade"] == 24 and debora["local"]   # bairro: 350 (padrão)
+    assert debora["igreja"] is None                                                     # igreja: 450
+    raquel = conexao_com(cliente, lucas, 290)["outra"]    # padrões: sobre 200, nome 250, idade 300
+    assert raquel["nome"] == "Raquel" and raquel["sobre"] and raquel["idade"] is None
+    sara = conexao_com(cliente, lucas, 150)["outra"]
+    assert sara["nome"] is None and sara["idade"] is None and sara["sobre"] is None
 
 
-def test_curtir_sem_afinidade_e_recusado(cliente):
+def test_pergunta_a_dois_abre_o_chat_e_a_foto_so_com_liberacao(cliente):
     lucas = entrar(cliente, LUCAS)
     completar(cliente, lucas, ["Louvor e música", "Café", "Leitura bíblica"])
-    todos = cliente.portal.call(cliente.app.state.c.repositorio.perfis, list(range(1, 30)))
-    lidia = next(p for p in todos.values() if p.nome.startswith("Lídia"))
-    r = cliente.post("/reacoes", headers=lucas, json={"para_id": lidia.id, "curtiu": True})
-    assert r.status_code == 409
+    con = conexao_com(cliente, lucas, 390)
+    detalhe = cliente.get(f"/conexoes/{con['id']}", headers=lucas).json()
+    assert detalhe["chat_abre_em"] == 400 and detalhe["nivel_dela"] is None        # sintonia ainda baixa
+    pergunta = detalhe["pergunta"]["atual"]
+    assert pergunta["texto"] and pergunta["minha"] is None and pergunta["dela"] is None
+    assert detalhe["pergunta"]["anterior"] is None
+    assert cliente.get(f"/conexoes/{con['id']}/mensagens", headers=lucas).status_code == 422   # chat fechado
+
+    r = cliente.post(f"/conexoes/{con['id']}/pergunta", headers=lucas, json={"texto": "Fico em silêncio e oro."})
+    assert r.status_code == 200 and r.json()["evento"]["pontos"] == 30
+    detalhe = cliente.get(f"/conexoes/{con['id']}", headers=lucas).json()
+    assert detalhe["pontos"] == 420 and detalhe["chat_aberto"]
+    assert detalhe["nivel_dela"] == "Semente"                                       # sintonia ≥ 85%
+    assert detalhe["pergunta"]["atual"]["texto"] != pergunta["texto"]               # a próxima (modo de teste)
+    anterior = detalhe["pergunta"]["anterior"]                                      # e as duas respostas da que passou
+    assert anterior["texto"] == pergunta["texto"] and anterior["minha"] and anterior["dela"]
+    assert cliente.post(f"/conexoes/{con['id']}/pergunta", headers=lucas,
+                        json={"texto": "me chama no zap 86 99999-1234"}).status_code == 422
+
+    cliente.post(f"/conexoes/{con['id']}/mensagens", headers=lucas, json={"texto": "Oi! Paz!"})
+    mensagens = cliente.get(f"/conexoes/{con['id']}/mensagens", headers=lucas).json()["mensagens"]
+    assert [m["minha"] for m in mensagens] == [True, False]                          # o bot respondeu
+
+    deb = entrar(cliente, DEBORA)
+    lucas_id = cliente.get("/eu", headers=lucas).json()["id"]
+    assert cliente.get(f"/fotos/{lucas_id}", headers=deb).status_code == 404         # foto: 450, não chegou
+    assert cliente.post(f"/conexoes/{con['id']}/liberar", headers=lucas, json={"item": "foto"}).status_code == 200
+    assert cliente.get(f"/fotos/{lucas_id}", headers=deb).status_code == 200
 
 
-def test_bio_moderada(cliente):
+def test_sinais_do_dia_sao_poucos_e_viram_conexao(cliente):
+    lucas = entrar(cliente, LUCAS)
+    assert cliente.get("/sinais", headers=lucas).json()["pronto"] is False
+    completar(cliente, lucas, ["Louvor e música", "Café", "Leitura bíblica", "Estudos teológicos"])
+    sinais = cliente.get("/sinais", headers=lucas).json()["sinais"]
+    assert 1 <= len(sinais) <= 3
+    assert all(s["nome"] is None and s["idade"] is None and s["foto"] is False for s in sinais)
+    assert all(s["motivos"] for s in sinais)
+    ja = {x["outra"]["id"] for x in cliente.get("/conexoes", headers=lucas).json()}
+    assert not ja & {s["id"] for s in sinais}                                       # quem já é conexão não volta
+    r = cliente.post("/sinais", headers=lucas, json={"para_id": sinais[0]["id"], "enviar": True}).json()
+    assert r["conexao"] and r["conexao"]["pontos"] >= 150                            # o bot devolveu o sinal
+    assert len(cliente.get("/sinais", headers=lucas).json()["sinais"]) == len(sinais) - 1
+    assert cliente.post("/sinais", headers=lucas, json={"para_id": 99999, "enviar": True}).status_code == 404
+
+
+def test_jornada_devocional_e_teste_pontuam_as_conexoes(cliente):
+    lucas = entrar(cliente, LUCAS)
+    con = conexao_com(cliente, lucas, 150)
+    j = cliente.get("/jornada", headers=lucas).json()
+    assert j["devocional"]["referencia"] and j["devocional"]["minha"] is None and j["nivel"] == "Semente"
+    r = cliente.post("/jornada/devocional", headers=lucas, json={"texto": "Aprendi a descansar no cuidado de Deus."})
+    assert r.status_code == 200 and r.json()["ganhou"] == 10 and r.json()["sequencia"] == 1
+    assert cliente.post("/jornada/devocional", headers=lucas, json={"texto": "de novo"}).status_code == 422
+
+    teste = j["testes"][0]
+    perguntas = cliente.get(f"/jornada/testes/{teste['id']}", headers=lucas).json()["lista"]
+    r = cliente.post(f"/jornada/testes/{teste['id']}", headers=lucas, json={"escolhas": [0] * len(perguntas)})
+    assert r.status_code == 200 and r.json()["ganhou"] == 40 and r.json()["pontos"] == 50
+    tipos = [e["tipo"] for e in cliente.get(f"/conexoes/{con['id']}", headers=lucas).json()["eventos"]]
+    assert "teste" in tipos and "devocional" in tipos                               # os bots também fizeram
+
+
+def test_revelacoes_configuraveis(cliente):
     ana = entrar(cliente, ANA)
-    r = cliente.put("/eu", headers=ana, json={"bio": "me chama no insta @ana"})
-    assert r.status_code == 422 and "conversa acontece aqui" in r.json()["detail"]
-    r = cliente.put("/eu", headers=ana, json={"bio": "texto proibido"})
-    assert r.status_code == 422
-    assert cliente.put("/eu", headers=ana, json={"bio": "Amo trilhas e louvor."}).status_code == 200
+    eu = cliente.put("/eu/revelacoes", headers=ana, json={"limites": {"idade": 150, "foto": None}}).json()
+    limites = {r["item"]: r["limite"] for r in eu["revelacoes"]}
+    assert limites["idade"] == 150 and limites["foto"] is None and limites["chat"] == 400
+    assert cliente.put("/eu/revelacoes", headers=ana, json={"limites": {"idade": 123}}).status_code == 422
 
 
-def test_ana_ve_os_rapazes_perto(cliente):
-    ana = entrar(cliente, ANA)
-    completar(cliente, ana, ["Louvor e música", "Tocar instrumento", "Corrida", "Trilhas e natureza"])
-    nomes = [c["nome"] for c in cliente.get("/descobrir", headers=ana).json()["cartoes"]]
-    assert {"Gabriel", "Davi"} <= set(nomes)
-    assert "Tiago" not in nomes                        # Amarante, ~60 km
-    eu = cliente.get("/eu", headers=ana).json()
-    assert eu["genero"] == Genero.FEMININO.value and eu["nome_publico"] == "Ana"
+def test_painel_do_lider(cliente):
+    assert cliente.get("/lider/conteudos").status_code == 401
+    pendentes = cliente.get("/lider/conteudos?status=pendente", headers=LIDER).json()
+    assert {p["tipo"] for p in pendentes} == {"pergunta", "devocional"}
+    pergunta = next(p for p in pendentes if p["tipo"] == "pergunta")
+    r = cliente.post(f"/lider/conteudos/{pergunta['id']}/aprovar", headers=LIDER, json={})
+    assert r.status_code == 200 and r.json()["status"] == "aprovado"
+    assert cliente.post("/lider/gerar", headers=LIDER, json={"tipo": "pergunta"}).status_code == 422   # sem IA
+    novo = cliente.post("/lider/conteudos", headers=LIDER, json={"tipo": "pergunta", "dados": {"texto": "curta"}})
+    assert novo.status_code == 422
+    assert cliente.get("/lider/denuncias", headers=LIDER).json() == []

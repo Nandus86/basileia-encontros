@@ -20,8 +20,12 @@ class Configuracao(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./dados/encontros.db"
     pasta_fotos: str = "./dados/fotos"
 
-    # Modo demonstração: CRM de mentira e perfis prontos (sem Mongo). Nunca em produção.
+    # Modo de teste: contas de teste e perfis que "jogam" sozinhos. Com o Mongo configurado, os CPFs reais
+    # também entram. Nunca em produção de verdade.
     modo_demo: bool = False
+
+    # Painel do líder (aprovar o conteúdo da IA, ver denúncias): a chave que ele digita no /lider
+    chave_lider: str = ""
 
     # Mongo do CRM — o mesmo usuário só de leitura do Motor de Cuidado
     mongo_uri: str = ""
@@ -45,6 +49,7 @@ class Configuracao(BaseSettings):
     modelo_jev: str = "~typesafe/jev-latest"
     modelo_reserva: str = "deepseek/deepseek-v4.1-flash"
     provedor_reserva: str = "DeepSeek"
+    modelo_escritor: str = "deepseek/deepseek-v4.1-flash"
     julgar_por_vez: int = 12
 
     porta: int = 8000

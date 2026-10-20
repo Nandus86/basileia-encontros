@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CampoBio, EnviarFoto, Preferencias, SeletorDeHobbies, useCatalogoDeHobbies } from "@/components/campos-do-perfil";
+import { CampoBio, EditorDeRevelacoes, EnviarFoto, Preferencias, SeletorDeHobbies, useCatalogoDeHobbies } from "@/components/campos-do-perfil";
 import { Botao, Protegida, Tela } from "@/components/estrutura";
 import { IconeLua, IconeSair, IconeSol, IconeTela } from "@/components/icones";
 import { useSessao } from "@/contexts/sessao";
@@ -55,14 +55,17 @@ function Conteudo() {
         <EnviarFoto perfil={perfil} aoMudar={atualizar} />
         <h2 className="mt-4 text-2xl font-extrabold">{perfil.nome_publico}, {perfil.idade}</h2>
         <p className="text-sm text-texto-2">{perfil.igreja}</p>
+        <p className="mt-3 rounded-full bg-superficie-2 px-4 py-1.5 text-sm font-bold">
+          Para os outros você é <span className="text-primaria">{perfil.simbolo} {perfil.codinome}</span>
+        </p>
         <p className="mt-2 max-w-xs text-xs text-texto-2">
-          Os outros veem só o seu primeiro nome. A foto aparece só para quem você liberar na conversa.
+          No começo os outros veem só o seu codinome e os seus interesses. O resto você revela aos poucos.
         </p>
       </section>
 
       {!perfil.completo && (
         <p className="rounded-2xl bg-primaria/10 p-4 text-sm font-medium">
-          Para aparecer no Descobrir, escolha pelo menos {catalogo.minimo} hobbies e mande uma foto.
+          Para receber sinais, escolha pelo menos {catalogo.minimo} hobbies e mande uma foto.
         </p>
       )}
 
@@ -88,16 +91,21 @@ function Conteudo() {
       )}
 
       <section>
+        <p className="rotulo mb-3">O que revelar e quando</p>
+        <EditorDeRevelacoes perfil={perfil} aoMudar={atualizar} />
+      </section>
+
+      <section>
         <p className="rotulo mb-3">Quem quero conhecer</p>
         <Preferencias perfil={perfil} aoMudar={atualizar} />
       </section>
 
       <section>
-        <p className="rotulo mb-3">Aparecer no Descobrir</p>
+        <p className="rotulo mb-3">Receber sinais</p>
         <label className="flex items-center justify-between gap-4 rounded-2xl border border-borda bg-superficie p-4">
           <span className="text-sm">
             <span className="block font-semibold">{perfil.visivel ? "Perfil ativo" : "Perfil pausado"}</span>
-            <span className="text-texto-2">Pausado, ninguém novo vê você. As conversas continuam.</span>
+            <span className="text-texto-2">Pausado, você não recebe nem aparece em sinais novos. As conexões continuam.</span>
           </span>
           <input type="checkbox" role="switch" checked={perfil.visivel} onChange={(e) => pausar(e.target.checked)}
             className="size-6 shrink-0 accent-[var(--primaria)]" />

@@ -1,45 +1,61 @@
-# Basiléia Encontros — MVP
+# Basiléia Encontros — 0.0.2 (jornada e mistério)
 
 App (web mobile, instalável como PWA) para **membros solteiros e maiores de idade** das igrejas no Basiléia
-se conhecerem por **afinidade**. A foto fica escondida: só aparece na conversa, depois do match,
-quando a própria pessoa libera.
+se conhecerem por **afinidade**, aos poucos. Ninguém aparece pelo nome: cada pessoa é um **codinome** (Cedro Sereno,
+Lírio Fiel…) e, no começo, só os **interesses** ficam visíveis. Nome, idade, bairro, foto, igreja e o chat são
+revelados conforme a **afinidade da dupla** cresce, nos limites que cada um escolhe.
+
+> A versão anterior (estilo "match") está no branch `0.0.1`.
 
 ```
 [App Next.js (frontend/)] ──HTTP──▶ [API FastAPI + LangGraph (backend/)] ──▶ Postgres (tabelas encontros_*)
                                               │   ├──▶ Mongo do CRM (só leitura: cadastro dos membros)
-                                              │   └──▶ OpenRouter: JEV (afinidade e moderação da bio)
+                                              │   └──▶ OpenRouter: JEV (afinidade, comparação de respostas,
+                                              │        temas, moderação) e um modelo de texto (gera conteúdo)
                                               └── fotos em disco (volume), servidas só com permissão
 ```
 
 ## Como funciona
 
-1. **Entrar** — CPF + CPF, conferido no Mongo do CRM (o mesmo acesso **provisório** do app de conversa/mensageiro,
-   até combinar uma senha de verdade com o dev do CRM). Tentativas limitadas e só igrejas liberadas.
-   A cada entrada o cadastro é lido de novo e só entra quem é **membro** (não visitante/contato, não desativado),
-   **18+** (data de nascimento do CRM), **solteiro** (estado civil do CRM; cônjuge ligado no cadastro = casado)
-   e com gênero no cadastro. Quem casou ou foi desativado sai do Descobrir na hora.
-2. **Perfil** — dados do CRM (nome, idade, cidade, localização) + o que a pessoa escolhe no app:
-   hobbies (mínimo 3, de um catálogo), "sobre mim" (moderado), foto (obrigatória, mas escondida) e preferências
-   (idade, distância). Para os outros aparece só o **primeiro nome** e a distância **arredondada** (a ~5 km).
-3. **Descobrir** — grafo do LangGraph ([curadoria.py](backend/encontros/aplicacao/curadoria.py)):
-   - `buscar_candidatos`: regras duras nos dois sentidos — gênero oposto, idade que **cada um** aceita, distância
-     dentro do raio dos dois (sem localização: só a mesma cidade). Sem IA.
-   - `separar_conhecidas`: a afinidade de cada par fica guardada e só é julgada de novo se algum dos dois perfis mudar.
-   - `julgar`: o **JEV** (`~typesafe/jev-latest`, endpoint `alpha/decisions` da OpenRouter, mesmo cliente do Motor de
-     Cuidado) responde 3 perguntas fechadas sobre o par: `afinidade` (alta/média/baixa — conta hobbies iguais e
-     *parecidos*, ex.: corrida e academia), `proximidade` (perto/razoável/longe) e `apresentar` (sim/não).
-     Se o JEV falhar → reserva por LLM pedindo JSON → por último, regras (só hobbies iguais).
-   - `montar_feed`: só os **compatíveis** (as "mesmas características"), os de mais afinidade primeiro.
-4. **Curtir / passar** — curtir só vale para quem o Descobrir mostraria (o servidor confere a afinidade guardada).
-   Curtida dos dois lados = **match**.
-5. **Conversa** — só com match. Cada um tem o botão **Liberar minha foto** (vale para aquela conversa, sem volta).
-   A foto não tem link público: a API só entrega para a própria pessoa ou para quem tem match ativo **e** recebeu a
-   liberação. Toda foto é reprocessada no servidor (tira o EXIF, que pode ter o GPS de casa).
-   Dá para **desfazer o match** e **denunciar** (encerra a conversa e esconde um do outro).
+**Dois placares**
+
+| | Jornada (da pessoa) | Afinidade (da dupla) |
+|---|---|---|
+| Sobe com | devocional diário (+10, mais bônus por dias seguidos), testes (+40), pergunta a dois (+5) | os dois responderem a mesma coisa de forma parecida |
+| Serve para | nível (Semente → Broto → Raiz → Árvore → Fruto), mais sinais por dia, análise mais funda | revelar o que cada um escolheu e abrir o chat |
+
+1. **Entrar** — CPF + CPF conferido no Mongo do CRM (acesso **provisório**, o mesmo do mensageiro). Só entra
+   **membro**, **18+** e **solteiro** pelo cadastro; quem casou ou foi desativado some na hora.
+2. **Cadastro** — hobbies, "sobre mim" (moderado), foto (obrigatória, escondida), **o que revelar e com quantos
+   pontos** (padrão: sobre 200, nome 250, idade 300, bairro 350, chat 400, foto 450, igreja 450; ou "só na mão")
+   e preferências de idade e distância.
+3. **Sinais do dia** — poucas pessoas por dia (3; 4 no nível Raiz; 5 no Fruto), escolhidas uma vez por dia:
+   - regras duras (gênero, idade que cada um aceita, distância) e o **JEV** julgando hobbies e localização
+     (grafo do LangGraph em [curadoria.py](backend/encontros/aplicacao/curadoria.py));
+   - a ordem e os motivos ficam mais fundos com o que a pessoa já respondeu: **testes em comum** (valores) e
+     **temas dos devocionais** ([conexoes.py](backend/encontros/aplicacao/conexoes.py), `_aprofundar`).
+   O cartão mostra só codinome, símbolo, interesses e o motivo ("Responderam parecido em ‘Igreja e serviço’").
+4. **Conexão** — os dois enviaram sinal. Começa com 150–200 pontos (pela afinidade de hobbies) e já soma o que
+   os dois tinham respondido em comum.
+5. **Pergunta a dois** — uma por dia por conexão. Cada um só vê a resposta do outro depois de responder; o JEV
+   compara (muito parecidas +30, parecidas +20, complementares +15, diferentes +5). Devocional do mesmo dia vale
+   metade; teste em comum, até +50 (as opções são uma escala, então 1 e 2 estão mais perto que 1 e 4).
+6. **Revelações** — cada item aparece quando a dupla chega no limite de quem revela, ou quando a pessoa libera na
+   mão naquela conexão. O **chat** precisa dos dois: vale o **maior** limite. A foto continua sem link público.
+   O nível de jornada da outra pessoa só aparece com **sintonia ≥ 85%** (a média de tudo que a dupla comparou).
+7. **Líder** (`/lider`, com a chave `ENCONTROS_CHAVE_LIDER`) — a IA gera devocionais, perguntas e testes como
+   **pendentes**; o líder revisa, edita, aprova ou recusa. Nada gerado chega aos membros sem aprovação. Os testes
+   são de **estilo** (reservado ↔ expansivo…), nunca de certo e errado. O painel também lista as denúncias.
+   O conteúdo inicial (8 devocionais, 12 perguntas, 3 testes, escritos à mão) entra como pendente em produção.
 
 ## Rodando no computador
 
-**Modo demonstração** (sem Mongo nem chave da OpenRouter; CRM de mentira com perfis prontos em Floriano-PI):
+**Modo de teste** (`ENCONTROS_MODO_DEMO=true`): contas de teste, conteúdo já aprovado e perfis que **jogam
+sozinhos** — devolvem o sinal, respondem a pergunta a dois, o devocional e os testes logo depois de você e
+respondem no chat. Quem entra ganha **3 conexões adiantadas (150, 290 e 390 pontos)** para testar as revelações,
+não há limite de uma pergunta por dia e aparece o botão "Mais sinais". Os perfis de teste aparecem para qualquer
+cidade. Se o `ENCONTROS_MONGO_URI` também estiver configurado, **os CPFs reais entram junto** (cada um com o seu
+cadastro). A chave do líder, se não for configurada, é `lider-teste`. Sem Mongo nem chave da OpenRouter também roda:
 
 ```bash
 # API
@@ -91,7 +107,11 @@ ENCONTROS_JWT_SECRET=um-segredo-novo-e-longo
 ENCONTROS_ORIGENS=https://encontros.seudominio
 ENCONTROS_OPENROUTER_API_KEY=sk-or-...
 ENCONTROS_ESTADOS_CIVIS=solteiro
+ENCONTROS_CHAVE_LIDER=uma-chave-para-a-lideranca
+ENCONTROS_MODO_DEMO=true                     # fase de testes: perfis que jogam sozinhos + CPFs reais
 ```
+
+As tabelas e colunas novas são criadas sozinhas ao subir (não precisa apagar o banco da 0.0.1).
 
 **2. `encontros-app`**
 - Caminho de build: `/frontend` · Dockerfile: `Dockerfile` · porta **3000**
@@ -116,7 +136,9 @@ Para testar sem o CRM no servidor, troque as variáveis do Mongo por `ENCONTROS_
 | `OPENROUTER_API_KEY` | chave da OpenRouter (JEV e reserva). Sem ela, a afinidade é só por hobbies iguais |
 | `MODELO_JEV` / `MODELO_RESERVA` | `~typesafe/jev-latest` / `deepseek/deepseek-v4.1-flash` |
 | `PASTA_FOTOS` | onde as fotos ficam (volume persistente) |
-| `MODO_DEMO` | `true` só no computador — **nunca em produção** |
+| `MODO_DEMO` | `true` = modo de teste (contas e perfis que jogam sozinhos). **Desligar antes de abrir ao público** |
+| `CHAVE_LIDER` | a chave do painel `/lider` (sem ela, o painel fica desligado; no modo de teste: `lider-teste`) |
+| `MODELO_ESCRITOR` | modelo que gera devocionais, perguntas e testes (padrão `deepseek/deepseek-v4.1-flash`) |
 
 App: `NEXT_PUBLIC_API_BASE` (no build) — endereço da API.
 
@@ -124,14 +146,17 @@ App: `NEXT_PUBLIC_API_BASE` (no build) — endereço da API.
 
 ```
 backend/encontros/
-├── dominio/          regras puras: quem entra, perfil, distância, afinidade por regras
-├── aplicacao/        casos de uso: entrar, perfil (+ moderação), curadoria (LangGraph), conversas; perguntas do JEV
-├── infraestrutura/   SQL (SQLAlchemy), CRM (Mongo), JEV/OpenRouter, fotos, tokens, CRM de demonstração
-├── entrada/api.py    rotas FastAPI
+├── dominio/          regras puras: quem entra, perfil, afinidade; jornada.py (níveis, pontos, revelações, codinomes)
+├── aplicacao/        casos de uso: entrar, perfil, curadoria (LangGraph), conexoes (sinais, revelações, pergunta
+│                     a dois, chat), jornada (devocional, testes), pontuacao, comparador, conteudo (líder + IA)
+├── infraestrutura/   SQL (SQLAlchemy + sincronização de colunas), CRM (Mongo), OpenRouter (JEV, reserva,
+│                     escritor), fotos, tokens, conteudo_semente, diretorio_demo (modo de teste e bots)
+├── entrada/          api.py + rotas_perfil, rotas_conexoes, rotas_jornada, rotas_lider
 └── testes/
 frontend/src/
-├── app/              entrar, boas-vindas (cadastro em 5 passos), descobrir, conversas, conversas/[id], perfil
-├── components/       cartão deslizável, avatar com cadeado, campos do perfil, estrutura (abas, botões)
+├── app/              entrar, boas-vindas (6 passos), sinais, conexoes, conexoes/[id], jornada,
+│                     jornada/teste/[id], perfil, lider
+├── components/       avatar com símbolo e cadeado, trilha de pontos, campos do perfil (revelações), estrutura
 ├── contexts/         sessão
 └── lib/              cliente da API, tema claro/escuro
 ```
@@ -140,7 +165,7 @@ frontend/src/
 
 - **Senha = CPF** é fraca (herdada do mensageiro). Antes de abrir para todas as igrejas: senha de verdade ou código
   por WhatsApp (o disparador já existe).
-- Conversa por consulta a cada 3 s (simples e leve). Com mais gente: WebSocket + Redis, como no mensageiro.
+- Chat por consulta a cada 3 s (simples e leve). Com mais gente: WebSocket + Redis, como no mensageiro.
 - Sem notificação push; limite de tentativas em memória (uma cópia só da API).
 - Denúncias ficam na tabela `encontros_denuncias`, sem painel ainda: falta a tela para a liderança analisar.
 - Tabelas criadas com `create_all`; quando o esquema mudar, passar para migrações.

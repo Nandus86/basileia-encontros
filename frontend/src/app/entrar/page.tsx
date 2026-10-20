@@ -27,7 +27,7 @@ export default function Entrar() {
   const [contasDeTeste, setContasDeTeste] = useState<ContaDeTeste[]>([]);
 
   useEffect(() => {
-    if (pronta && token && perfil) router.replace(perfil.completo ? "/descobrir" : "/boas-vindas");
+    if (pronta && token && perfil) router.replace(perfil.completo ? "/sinais" : "/boas-vindas");
   }, [pronta, token, perfil, router]);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export default function Entrar() {
       if ("escolher" in r) setIgrejas(r.escolher);
       else {
         abrir(r.token, r.perfil);
-        router.replace(r.perfil.completo ? "/descobrir" : "/boas-vindas");
+        router.replace(r.perfil.completo ? "/sinais" : "/boas-vindas");
       }
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível entrar agora.");

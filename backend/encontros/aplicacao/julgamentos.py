@@ -5,6 +5,7 @@ from typing import Mapping
 
 from encontros.aplicacao.portas import Pergunta
 from encontros.dominio.afinidade import Afinidade, Nivel, Proximidade
+from encontros.dominio.jornada import TEMAS
 
 PERGUNTAS_AFINIDADE = {
     "afinidade": Pergunta(
@@ -32,8 +33,17 @@ PERGUNTAS_BIO = {
          "improprio": "Conteúdo sexual, ofensivo, discriminatório, venda ou propaganda"}),
 }
 
+PERGUNTA_COMPARAR = Pergunta(
+    "Compare as respostas das duas pessoas à mesma pergunta. Elas pensam e vivem a fé de um jeito parecido?",
+    {"muito_parecidas": "Dizem quase a mesma coisa, com a mesma visão e o mesmo tom",
+     "parecidas": "Visão parecida, com palavras ou exemplos diferentes",
+     "complementares": "Ângulos diferentes que se completam, sem conflito",
+     "diferentes": "Visões ou prioridades diferentes, ou uma delas quase não respondeu"})
+
+PERGUNTA_TEMA = Pergunta("Qual é o tema principal do que a pessoa escreveu?", TEMAS)
+
 MOTIVOS_BIO = {
-    "contato": "Tire telefone, @ ou links do texto: a conversa acontece aqui dentro, depois do match.",
+    "contato": "Tire telefone, @ ou links do texto: a conversa acontece aqui dentro, quando a conexão liberar o chat.",
     "improprio": "Esse texto não combina com o app. Escreva sobre você, seus gostos e o que procura.",
 }
 

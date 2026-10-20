@@ -1,5 +1,6 @@
-"""Julgadores (mesmo desenho do Motor de Cuidado): o JEV da OpenRouter, rápido e tipado, e uma reserva
-por LLM pedindo JSON, para quando o JEV falhar (o endpoint de decisões ainda é alpha)."""
+"""IA pela OpenRouter. Julgadores (mesmo desenho do Motor de Cuidado): o JEV, rápido e tipado, e uma reserva
+por LLM pedindo JSON, para quando o JEV falhar (o endpoint de decisões ainda é alpha). E o escritor, que
+gera conteúdo novo para o líder aprovar."""
 from __future__ import annotations
 
 import json
@@ -21,15 +22,15 @@ class ErroOpenRouter(RuntimeError):
 
 
 class ClienteOpenRouter:
-    def __init__(self, chave: str, timeout: float = 30.0):
+    def __init__(self, chave: str, timeout: float = 90.0):
         if not chave:
             raise ErroOpenRouter("chave da OpenRouter não configurada (ENCONTROS_OPENROUTER_API_KEY)")
         self._cabecalhos = {"Authorization": f"Bearer {chave}", "X-Title": "Basileia - Encontros"}
         self._http = httpx.AsyncClient(base_url=BASE, timeout=timeout, headers=self._cabecalhos)
 
     async def conversar(self, modelo: str, mensagens: List[Mapping[str, str]], provedores: Optional[List[str]] = None,
-                        max_tokens: int = 200) -> str:
-        corpo: Dict[str, Any] = {"model": modelo, "messages": list(mensagens), "temperature": 0,
+                        max_tokens: int = 200, temperatura: float = 0) -> str:
+        corpo: Dict[str, Any] = {"model": modelo, "messages": list(mensagens), "temperature": temperatura,
                                  "max_tokens": max_tokens, "reasoning": {"enabled": False},
                                  "response_format": {"type": "json_object"}}
         if provedores:
@@ -99,6 +100,22 @@ class JulgadorLLM:
                                               provedores=self._provedores)
         achado = re.search(r"\{.*\}", texto, re.S)
         return Julgamento(_validar(json.loads(achado.group(0) if achado else texto), perguntas), "llm")
+
+
+class EscritorLLM:
+    """Escreve devocionais, perguntas e testes (sempre como JSON). O líder revisa antes de publicar."""
+
+    def __init__(self, cliente: ClienteOpenRouter, modelo: str, provedores: Optional[List[str]] = None):
+        self._cliente = cliente
+        self._modelo = modelo
+        self._provedores = provedores
+
+    async def escrever(self, instrucao: str, pedido: str) -> dict:
+        texto = await self._cliente.conversar(self._modelo, [{"role": "system", "content": instrucao},
+                                                             {"role": "user", "content": pedido}],
+                                              provedores=self._provedores, max_tokens=4000, temperatura=0.8)
+        achado = re.search(r"\{.*\}", texto, re.S)
+        return json.loads(achado.group(0) if achado else texto)
 
 
 class JulgadorComReserva:

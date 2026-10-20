@@ -1,4 +1,7 @@
-import type { Cartao, ContaDeTeste, Match, MensagemChat, MeuPerfil } from "@/types";
+import type {
+  ContaDeTeste, Conteudo, Denuncia, DetalheDaConexao, Devocional, EventoDaDupla, ItemDeRevelacao, Jornada,
+  MensagemChat, MeuPerfil, Publico, ResumoDaConexao, ResumoDoTeste, Sinal, Teste,
+} from "@/types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8020";
 
@@ -19,9 +22,10 @@ export function configurarSessao(token: string | null, quandoVencer: () => void)
   aoSair = quandoVencer;
 }
 
-async function chamar<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> {
+async function chamar<T>(caminho: string, opcoes: RequestInit = {}, chaveLider?: string): Promise<T> {
   const headers = new Headers(opcoes.headers);
-  if (tokenAtual) headers.set("Authorization", `Bearer ${tokenAtual}`);
+  if (tokenAtual && !chaveLider) headers.set("Authorization", `Bearer ${tokenAtual}`);
+  if (chaveLider) headers.set("X-Chave-Lider", chaveLider);
   if (opcoes.body && !(opcoes.body instanceof FormData)) headers.set("Content-Type", "application/json");
   let res: Response;
   try {
@@ -29,7 +33,7 @@ async function chamar<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> 
   } catch {
     throw new ErroDaApi("Sem conexão. Confira a internet e tente de novo.", 0);
   }
-  if (res.status === 401 && tokenAtual) {
+  if (res.status === 401 && tokenAtual && !chaveLider) {
     aoSair?.();
     throw new NaoAutorizado();
   }
@@ -45,14 +49,17 @@ async function chamar<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> 
 }
 
 const json = (corpo: unknown) => JSON.stringify(corpo);
+const post = (corpo?: unknown): RequestInit => ({ method: "POST", body: corpo === undefined ? undefined : json(corpo) });
 
 export type ResultadoEntrada =
   | { token: string; perfil: MeuPerfil }
   | { escolher: { igreja_id: string; igreja_nome: string }[] };
 
+type ComJornada<T> = T & Jornada;
+
 export const api = {
   entrar: (usuario: string, senha: string, igreja_id?: string) =>
-    chamar<ResultadoEntrada>("/entrar", { method: "POST", body: json({ usuario, senha, igreja_id }) }),
+    chamar<ResultadoEntrada>("/entrar", post({ usuario, senha, igreja_id })),
   contasDeTeste: () => chamar<ContaDeTeste[]>("/demo/contas"),
   saude: () => chamar<{ ok: boolean; demo: boolean }>("/saude"),
   hobbies: () => chamar<{ hobbies: string[]; minimo: number }>("/hobbies"),
@@ -60,35 +67,53 @@ export const api = {
   eu: () => chamar<MeuPerfil>("/eu"),
   mudarEu: (campos: Partial<Pick<MeuPerfil, "hobbies" | "bio" | "idade_min" | "idade_max" | "raio_km" | "visivel">>) =>
     chamar<MeuPerfil>("/eu", { method: "PUT", body: json(campos) }),
-  mudarLocal: (lat: number, lon: number) =>
-    chamar<MeuPerfil>("/eu/localizacao", { method: "POST", body: json({ lat, lon }) }),
+  mudarRevelacoes: (limites: Partial<Record<ItemDeRevelacao, number | null>>) =>
+    chamar<MeuPerfil>("/eu/revelacoes", { method: "PUT", body: json({ limites }) }),
+  mudarLocal: (lat: number, lon: number) => chamar<MeuPerfil>("/eu/localizacao", post({ lat, lon })),
   mandarFoto: (arquivo: Blob) => {
     const dados = new FormData();
     dados.append("foto", arquivo, "foto.jpg");
     return chamar<MeuPerfil>("/eu/foto", { method: "POST", body: dados });
   },
 
-  descobrir: () => chamar<{ pronto: boolean; cartoes: Cartao[] }>("/descobrir"),
-  reagir: (para_id: number, curtiu: boolean) =>
-    chamar<{ match: { id: number; pessoa: Cartao } | null }>("/reacoes", {
-      method: "POST",
-      body: json({ para_id, curtiu }),
-    }),
+  sinais: () => chamar<{ pronto: boolean; sinais: Sinal[]; demo: boolean }>("/sinais"),
+  responderSinal: (para_id: number, enviar: boolean) =>
+    chamar<{ conexao: { id: number; pontos: number; outra: Publico } | null }>("/sinais", post({ para_id, enviar })),
+  maisSinais: () => chamar<{ ok: true }>("/sinais/mais", post()),
 
-  matches: () => chamar<Match[]>("/matches"),
-  match: (id: number) => chamar<Omit<Match, "ultima" | "nao_lidas">>(`/matches/${id}`),
+  conexoes: () => chamar<ResumoDaConexao[]>("/conexoes"),
+  conexao: (id: number) => chamar<DetalheDaConexao>(`/conexoes/${id}`),
+  liberar: (id: number, item: ItemDeRevelacao) => chamar<{ ok: true }>(`/conexoes/${id}/liberar`, post({ item })),
+  responderPergunta: (id: number, texto: string) =>
+    chamar<{ evento: EventoDaDupla | null }>(`/conexoes/${id}/pergunta`, post({ texto })),
   mensagens: (id: number, depois_de = 0) =>
-    chamar<{ mensagens: MensagemChat[]; foto_liberada: boolean; eu_liberei: boolean }>(
-      `/matches/${id}/mensagens?depois_de=${depois_de}`,
-    ),
-  enviar: (id: number, texto: string) =>
-    chamar<MensagemChat>(`/matches/${id}/mensagens`, { method: "POST", body: json({ texto }) }),
-  marcarLido: (id: number, ate: number) =>
-    chamar<{ ok: true }>(`/matches/${id}/lido`, { method: "POST", body: json({ ate }) }),
-  liberarFoto: (id: number) => chamar<{ ok: true }>(`/matches/${id}/liberar-foto`, { method: "POST" }),
-  desfazer: (id: number) => chamar<{ ok: true }>(`/matches/${id}`, { method: "DELETE" }),
-  denunciar: (pessoa_id: number, motivo: string) =>
-    chamar<{ ok: true }>("/denuncias", { method: "POST", body: json({ pessoa_id, motivo }) }),
+    chamar<{ mensagens: MensagemChat[] }>(`/conexoes/${id}/mensagens?depois_de=${depois_de}`),
+  enviar: (id: number, texto: string) => chamar<MensagemChat>(`/conexoes/${id}/mensagens`, post({ texto })),
+  marcarLido: (id: number, ate: number) => chamar<{ ok: true }>(`/conexoes/${id}/lido`, post({ ate })),
+  desfazer: (id: number) => chamar<{ ok: true }>(`/conexoes/${id}`, { method: "DELETE" }),
+  denunciar: (pessoa_id: number, motivo: string) => chamar<{ ok: true }>("/denuncias", post({ pessoa_id, motivo })),
+
+  jornada: () =>
+    chamar<ComJornada<{ devocional: Devocional | null; testes: ResumoDoTeste[] }>>("/jornada"),
+  fazerDevocional: (texto: string) => chamar<ComJornada<{ ganhou: number }>>("/jornada/devocional", post({ texto })),
+  teste: (id: number) => chamar<Teste>(`/jornada/testes/${id}`),
+  fazerTeste: (id: number, escolhas: number[]) =>
+    chamar<ComJornada<{ ganhou: number }>>(`/jornada/testes/${id}`, post({ escolhas })),
+};
+
+/** Painel do líder: tudo vai com a chave dele, nunca com o token de membro. */
+export const lider = {
+  conferir: (chave: string) => chamar<{ ok: true }>("/lider/entrar", {}, chave),
+  conteudos: (chave: string, status?: string) =>
+    chamar<Conteudo[]>(`/lider/conteudos${status ? `?status=${status}` : ""}`, {}, chave),
+  aprovar: (chave: string, id: number, dados?: Record<string, unknown>) =>
+    chamar<Conteudo>(`/lider/conteudos/${id}/aprovar`, post({ dados }), chave),
+  recusar: (chave: string, id: number) => chamar<Conteudo>(`/lider/conteudos/${id}/recusar`, post(), chave),
+  criar: (chave: string, tipo: string, dados: Record<string, unknown>) =>
+    chamar<Conteudo>("/lider/conteudos", post({ tipo, dados }), chave),
+  gerar: (chave: string, tipo: string, quantidade: number) =>
+    chamar<Conteudo[]>("/lider/gerar", post({ tipo, quantidade }), chave),
+  denuncias: (chave: string) => chamar<Denuncia[]>("/lider/denuncias", {}, chave),
 };
 
 /** A foto não tem link público: vem com o token e vira um endereço local (blob:) só nesta aba. */

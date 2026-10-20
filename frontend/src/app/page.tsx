@@ -12,7 +12,7 @@ export default function Inicio() {
   useEffect(() => {
     if (!pronta) return;
     if (!token || !perfil) router.replace("/entrar");
-    else router.replace(perfil.completo ? "/descobrir" : "/boas-vindas");
+    else router.replace(perfil.completo ? "/sinais" : "/boas-vindas");
   }, [pronta, token, perfil, router]);
 
   return <Carregando />;

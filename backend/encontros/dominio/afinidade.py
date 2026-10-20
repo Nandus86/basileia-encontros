@@ -67,6 +67,8 @@ def podem_se_ver(a: Perfil, b: Perfil) -> bool:
         return False
     if not (a.idade_min <= b.idade <= a.idade_max and b.idade_min <= a.idade <= b.idade_max):
         return False
+    if a.demo or b.demo:
+        return True
     km = distancia_entre(a, b)
     if km is None:
         return mesma_cidade(a, b)
@@ -84,7 +86,9 @@ def afinidade_por_regras(a: Perfil, b: Perfil) -> Afinidade:
     else:
         nivel = Nivel.BAIXA
     km = distancia_entre(a, b)
-    if km is None:
+    if a.demo or b.demo:
+        proximidade = Proximidade.PERTO
+    elif km is None:
         proximidade = Proximidade.PERTO if mesma_cidade(a, b) else Proximidade.LONGE
     elif km <= 15:
         proximidade = Proximidade.PERTO
@@ -113,7 +117,9 @@ def descrever_para_o_julgador(a: Perfil, b: Perfil) -> str:
         return (f"{rotulo}: {p.idade} anos, mora em {onde}. Aceita conhecer pessoas a até {p.raio_km} km.\n"
                 f"  Hobbies: {', '.join(p.hobbies) or '(nenhum)'}\n  Sobre: {sobre}")
     km = distancia_entre(a, b)
-    if km is not None:
+    if a.demo or b.demo:
+        distancia = "Moram perto uma da outra."
+    elif km is not None:
         distancia = f"Distância entre as duas: cerca de {round(km)} km."
     else:
         distancia = "Distância exata desconhecida; " + ("moram na mesma cidade." if mesma_cidade(a, b) else "cidades diferentes.")

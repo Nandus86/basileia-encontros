@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSessao } from "@/contexts/sessao";
 import { api } from "@/lib/api";
-import { IconeBussola, IconeConversa, IconeUsuario } from "./icones";
+import { IconeBrilho, IconeConversa, IconeTrilha, IconeUsuario } from "./icones";
 
 export function Logo({ pequeno = false }: { pequeno?: boolean }) {
   return (
@@ -44,18 +44,21 @@ export function Protegida({ children, completo = true }: { children: React.React
 }
 
 const ABAS = [
-  { href: "/descobrir", rotulo: "Descobrir", Icone: IconeBussola },
-  { href: "/conversas", rotulo: "Conversas", Icone: IconeConversa },
+  { href: "/sinais", rotulo: "Sinais", Icone: IconeBrilho },
+  { href: "/conexoes", rotulo: "Conexões", Icone: IconeConversa },
+  { href: "/jornada", rotulo: "Jornada", Icone: IconeTrilha },
   { href: "/perfil", rotulo: "Perfil", Icone: IconeUsuario },
 ];
 
-/** Mensagens novas no ícone de Conversas (confere a cada 20 s; leve o bastante para o MVP). */
+/** Mensagens novas e perguntas a dois esperando, no ícone de Conexões (confere a cada 20 s). */
 function useNaoLidas() {
   const [total, setTotal] = useState(0);
   useEffect(() => {
     let vivo = true;
     const conferir = () =>
-      api.matches().then((ms) => vivo && setTotal(ms.reduce((s, m) => s + m.nao_lidas, 0))).catch(() => {});
+      api.conexoes()
+        .then((cs) => vivo && setTotal(cs.reduce((s, c) => s + c.nao_lidas + (c.pergunta_pendente ? 1 : 0), 0)))
+        .catch(() => {});
     conferir();
     const id = setInterval(conferir, 20000);
     return () => {
@@ -77,11 +80,11 @@ export function BarraDeAbas() {
           return (
             <li key={href}>
               <Link href={href} aria-current={ativa ? "page" : undefined}
-                className={`relative flex min-w-20 flex-col items-center gap-1 px-3 pt-2.5 pb-1 text-xs font-semibold ${ativa ? "text-primaria" : "text-texto-2"}`}>
+                className={`relative flex min-w-18 flex-col items-center gap-1 px-2 pt-2.5 pb-1 text-xs font-semibold ${ativa ? "text-primaria" : "text-texto-2"}`}>
                 <Icone className="size-6" />
                 {rotulo}
-                {href === "/conversas" && naoLidas > 0 && (
-                  <span className="absolute top-1.5 right-4 min-w-5 rounded-full bg-perigo px-1.5 text-center text-[11px] leading-5 text-white">
+                {href === "/conexoes" && naoLidas > 0 && (
+                  <span className="absolute top-1.5 right-3 min-w-5 rounded-full bg-perigo px-1.5 text-center text-[11px] leading-5 text-white">
                     {naoLidas > 9 ? "9+" : naoLidas}
                   </span>
                 )}

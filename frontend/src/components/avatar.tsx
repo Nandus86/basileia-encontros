@@ -19,10 +19,11 @@ export function tom(id: number) {
   return `linear-gradient(145deg, ${a}, ${b})`;
 }
 
-/** A foto só aparece quando liberada (ou é a própria). Antes disso: a inicial e um cadeado. */
-export function Avatar({ id, nome, liberada, tamanho = 48, recarregar = 0, quadrado = false }: {
+/** Enquanto a foto não é revelada: o símbolo do codinome (ou a inicial) e um cadeado. */
+export function Avatar({ id, nome, simbolo, liberada, tamanho = 48, recarregar = 0, quadrado = false }: {
   id: number;
   nome: string;
+  simbolo?: string;
   liberada: boolean;
   tamanho?: number;
   recarregar?: number;
@@ -47,14 +48,14 @@ export function Avatar({ id, nome, liberada, tamanho = 48, recarregar = 0, quadr
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt={`Foto de ${nome}`} className="size-full object-cover" />
       ) : (
-        <span className="flex size-full items-center justify-center font-bold"
-          style={{ fontSize: tamanho * 0.42 }}>
-          {nome.charAt(0).toUpperCase()}
+        <span className="flex size-full items-center justify-center font-bold" aria-hidden="true"
+          style={{ fontSize: tamanho * (simbolo ? 0.46 : 0.42) }}>
+          {simbolo || nome.charAt(0).toUpperCase()}
         </span>
       )}
       {!liberada && tamanho >= 40 && (
         <span className="absolute right-0 bottom-0 flex items-center justify-center rounded-full bg-black/45"
-          style={{ width: tamanho * 0.36, height: tamanho * 0.36 }} title="Foto ainda não liberada">
+          style={{ width: tamanho * 0.36, height: tamanho * 0.36 }} title="Foto ainda não revelada">
           <IconeCadeado className="size-[60%]" />
         </span>
       )}

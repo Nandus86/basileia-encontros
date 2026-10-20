@@ -159,7 +159,18 @@ class Perfil:
     raio_km: int = 30
     visivel: bool = True
     elegivel: bool = True
+    codinome: str = ""
+    simbolo: str = ""
+    jornada: int = 0
+    sequencia: int = 0
+    ultimo_devocional: Optional[str] = None          # AAAA-MM-DD
+    revelacoes: dict = field(default_factory=dict, compare=False)   # item → limite (None = só na mão)
     extras: dict = field(default_factory=dict, compare=False)
+
+    @property
+    def demo(self) -> bool:
+        """Perfil de teste (modo demonstração): aparece para qualquer um, de qualquer cidade."""
+        return self.membro_id.startswith("demo-")
 
     @property
     def completo(self) -> bool:

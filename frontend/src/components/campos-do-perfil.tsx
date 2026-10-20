@@ -186,3 +186,38 @@ export function Preferencias({ perfil, aoMudar }: { perfil: MeuPerfil; aoMudar: 
     </div>
   );
 }
+
+/** Com quantos pontos de afinidade cada coisa é revelada. "Só eu libero" = nunca sozinho, só no botão da conexão. */
+export function EditorDeRevelacoes({ perfil, aoMudar }: { perfil: MeuPerfil; aoMudar: (p: MeuPerfil) => void }) {
+  const [aviso, setAviso] = useState("");
+
+  async function mudar(item: string, valor: string) {
+    setAviso("");
+    try {
+      aoMudar(await api.mudarRevelacoes({ [item]: valor === "mao" ? null : Number(valor) }));
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : "Não consegui salvar.");
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {perfil.revelacoes.map((r) => (
+        <label key={r.item} className={`flex items-center justify-between gap-3 rounded-2xl border p-3 ${
+          r.item === "chat" ? "border-primaria/50 bg-primaria/5" : "border-borda bg-superficie"}`}>
+          <span className="text-sm font-semibold">{r.rotulo}</span>
+          <select value={r.limite ?? "mao"} onChange={(e) => mudar(r.item, e.target.value)}
+            className="h-10 rounded-xl border border-borda bg-fundo px-2 text-sm font-semibold text-primaria outline-none focus:border-primaria">
+            {perfil.limites_possiveis.map((p) => <option key={p} value={p}>com {p} pontos</option>)}
+            <option value="mao">só quando eu liberar</option>
+          </select>
+        </label>
+      ))}
+      <p className="pt-1 text-xs text-texto-2">
+        Os pontos são da afinidade com cada pessoa: sobem quando vocês dois respondem parecido. O chat abre quando
+        os dois chegam ao seu limite (vale o maior). Em qualquer conexão dá para liberar antes, na mão.
+      </p>
+      {aviso && <p role="alert" className="text-sm text-perigo">{aviso}</p>}
+    </div>
+  );
+}
