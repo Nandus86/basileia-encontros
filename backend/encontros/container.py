@@ -89,7 +89,7 @@ async def montar(config: Configuracao) -> Container:
         diretorio, liberacao = real, Liberacao.de_texto(config.igrejas)
         await semear_conteudo(repositorio, aprovado=False)     # em produção, o líder aprova antes
 
-    curadoria = Curadoria(repositorio, julgador, julgar_por_vez=config.julgar_por_vez)
+    curadoria = Curadoria(repositorio, julgador, julgar_por_vez=config.julgar_por_vez, perfis_de_teste=config.modo_demo)
     comparador = Comparador(julgador)
     pontuacao = Pontuacao(repositorio, comparador)
     conexoes = Conexoes(repositorio, curadoria, pontuacao, bots, demo=config.modo_demo)

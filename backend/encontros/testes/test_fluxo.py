@@ -180,3 +180,12 @@ def test_painel_do_lider(cliente):
     novo = cliente.post("/lider/conteudos", headers=LIDER, json={"tipo": "pergunta", "dados": {"texto": "curta"}})
     assert novo.status_code == 422
     assert cliente.get("/lider/denuncias", headers=LIDER).json() == []
+
+
+def test_sem_modo_de_teste_os_perfis_de_teste_somem_dos_sinais(cliente):
+    lucas = entrar(cliente, LUCAS)
+    completar(cliente, lucas, ["Louvor e música", "Café", "Leitura bíblica", "Estudos teológicos"])
+    c = cliente.app.state.c
+    c.curadoria._perfis_de_teste = False
+    cliente.portal.call(c.conexoes.mais_sinais, cliente.portal.call(c.repositorio.perfil, 1))
+    assert cliente.get("/sinais", headers=lucas).json()["sinais"] == []

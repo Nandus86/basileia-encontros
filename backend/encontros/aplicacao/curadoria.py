@@ -46,8 +46,10 @@ class Curadoria:
     TAMANHO_DO_FEED = 20
 
     def __init__(self, repositorio: Repositorio, julgador: Optional[Julgador], julgar_por_vez: int = 12,
-                 simultaneos: int = 4):
+                 simultaneos: int = 4, perfis_de_teste: bool = False):
         self._repo = repositorio
+        # com o modo de teste desligado, os perfis de teste que ficaram no banco não aparecem para ninguém
+        self._perfis_de_teste = perfis_de_teste
         self._julgador = julgador
         self._julgar_por_vez = julgar_por_vez
         self._simultaneos = simultaneos
@@ -84,7 +86,7 @@ class Curadoria:
         if not (pessoa.completo and pessoa.visivel and pessoa.elegivel):
             return {"candidatos": []}
         achados = await self._repo.candidatos_para(pessoa, self.CANDIDATOS_POR_VEZ)
-        return {"candidatos": [c for c in achados if podem_se_ver(pessoa, c)]}
+        return {"candidatos": [c for c in achados if podem_se_ver(pessoa, c) and (self._perfis_de_teste or not c.demo)]}
 
     async def _separar_conhecidas(self, estado: EstadoDaCuradoria) -> EstadoDaCuradoria:
         pessoa, candidatos = estado["pessoa"], estado["candidatos"]
